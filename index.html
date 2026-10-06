@@ -306,7 +306,7 @@ function rDashboard(){
     '<button class="btn-add" id="add-task-btn">＋ 추가</button>'+
   '</div>'+
   '<div class="tbl-wrap"><table>'+
-    '<thead><tr><th style="width:90px">팀</th><th style="width:100px">분류</th><th>업무명</th><th style="width:80px">담당자</th><th style="width:100px">상태</th><th style="width:72px">등록일</th><th style="width:72px">기한</th><th style="width:80px"></th></tr></thead>'+
+    '<thead><tr><th style="width:88px">팀</th><th style="width:96px">분류</th><th>업무명</th><th style="width:76px">담당자</th><th style="width:96px">상태</th><th style="width:80px;white-space:nowrap">등록일</th><th style="width:80px;white-space:nowrap">기한</th><th style="width:88px;white-space:nowrap"></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
   '</table></div>';
 }
@@ -321,12 +321,12 @@ function rTaskRow(t){
     '<td><div class="task-title" data-detail="'+t.id+'">'+t.title+'</div>'+(t.desc?'<div class="task-desc">'+t.desc+'</div>':'')+'</td>'+
     '<td>'+(t.assignee||'-')+'</td>'+
     '<td><select class="status-sel" data-statusid="'+t.id+'" style="background-color:'+sc.bg+';color:'+sc.text+'">'+statusOpts+'</select></td>'+
-    '<td style="font-size:12px;color:var(--text3)">'+fmtDate(t.createdAt)+'</td>'+
-    '<td style="font-size:12.5px;">'+
+    '<td style="font-size:12px;color:var(--text3);white-space:nowrap">'+fmtDate(t.createdAt)+'</td>'+
+    '<td style="font-size:12.5px;white-space:nowrap">'+
       (t.due==='TBD' ? '<span style="background:var(--gray-bg);color:var(--text3);padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600">TBD</span>' :
         '<span style="color:var(--text2)">'+fmtDue(t.due)+'</span>')+
     '</td>'+
-    '<td><span class="act-link" data-edit="'+t.id+'">편집</span><span class="act-link danger" data-del="'+t.id+'">삭제</span></td>'+
+    '<td style="white-space:nowrap"><span class="act-link" data-edit="'+t.id+'">편집</span><span class="act-link danger" data-del="'+t.id+'">삭제</span></td>'+
   '</tr>';
 }
 
@@ -561,7 +561,7 @@ function saveTaskForm(){
   if(!title){ alert('업무명을 입력하세요.'); return; }
   if(S.modal.type==='editTask'){
     const t = S.data.tasks.find(function(x){return x.id===S.modal.id;});
-    if(t){ const updated = readTaskForm(t.id); updated.logs = t.logs; updated.createdAt = t.createdAt || td(); Object.assign(t, updated); }
+    if(t){ const updated = readTaskForm(t.id); updated.logs = t.logs; updated.createdAt = t.createdAt; Object.assign(t, updated); }
   } else {
     const newTask = readTaskForm(uid(S.data.tasks));
     newTask.createdAt = td();
