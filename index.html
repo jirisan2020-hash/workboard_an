@@ -95,7 +95,7 @@ tr:hover td{background:#FAFBFC}
 .modal-bx{background:#fff;border-radius:12px;padding:1.5rem;width:480px;max-width:100%;box-shadow:0 10px 40px rgba(0,0,0,.18)}
 .modal-bx.wide{width:600px}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:1.1rem}
-.det-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 14px;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
+.det-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px 14px;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
 .det-lbl{font-size:11px;color:var(--text3);margin-bottom:2px}
 .det-val{font-size:13px;font-weight:500}
 .note-box{background:var(--gray-bg);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:1rem}
@@ -215,7 +215,8 @@ function loadData(){
 function saveData(){ try{ localStorage.setItem(SKEY, JSON.stringify(S.data)); }catch(e){} }
 const uid = arr => Math.max(0, ...arr.map(x=>x.id)) + 1;
 const td  = () => new Date().toISOString().slice(0,10);
-const fmtDue = iso => { if(!iso) return '-'; const p=iso.split('-'); return (+p[1])+'월 '+(+p[2])+'일'; };
+const fmtDue = function(iso){ if(!iso || iso==='TBD') return iso==='TBD' ? 'TBD' : '-'; const p=iso.split('-'); return (+p[1])+'월 '+(+p[2])+'일'; };
+const fmtDate = function(iso){ if(!iso) return '-'; const p=iso.split('-'); return (+p[1])+'월 '+(+p[2])+'일'; };
 const teamOf = name => S.data.teams.find(t=>t.name===name) || {bg:'var(--gray-bg)',text:'var(--text2)'};
 function categories(){
   const set = new Set();
@@ -305,7 +306,7 @@ function rDashboard(){
     '<button class="btn-add" id="add-task-btn">＋ 추가</button>'+
   '</div>'+
   '<div class="tbl-wrap"><table>'+
-    '<thead><tr><th style="width:90px">팀</th><th style="width:100px">분류</th><th>업무명</th><th style="width:80px">담당자</th><th style="width:100px">상태</th><th style="width:80px">기한</th><th style="width:90px"></th></tr></thead>'+
+    '<thead><tr><th style="width:90px">팀</th><th style="width:100px">분류</th><th>업무명</th><th style="width:80px">담당자</th><th style="width:100px">상태</th><th style="width:72px">등록일</th><th style="width:72px">기한</th><th style="width:80px"></th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
   '</table></div>';
 }
@@ -320,7 +321,11 @@ function rTaskRow(t){
     '<td><div class="task-title" data-detail="'+t.id+'">'+t.title+'</div>'+(t.desc?'<div class="task-desc">'+t.desc+'</div>':'')+'</td>'+
     '<td>'+(t.assignee||'-')+'</td>'+
     '<td><select class="status-sel" data-statusid="'+t.id+'" style="background-color:'+sc.bg+';color:'+sc.text+'">'+statusOpts+'</select></td>'+
-    '<td style="font-size:12.5px;color:var(--text2)">'+fmtDue(t.due)+'</td>'+
+    '<td style="font-size:12px;color:var(--text3)">'+fmtDate(t.createdAt)+'</td>'+
+    '<td style="font-size:12.5px;">'+
+      (t.due==='TBD' ? '<span style="background:var(--gray-bg);color:var(--text3);padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600">TBD</span>' :
+        '<span style="color:var(--text2)">'+fmtDue(t.due)+'</span>')+
+    '</td>'+
     '<td><span class="act-link" data-edit="'+t.id+'">편집</span><span class="act-link danger" data-del="'+t.id+'">삭제</span></td>'+
   '</tr>';
 }
@@ -373,7 +378,8 @@ function rDetailModal(id){
       '<div><div class="det-lbl">팀</div><div class="det-val">'+t.team+'</div></div>'+
       '<div><div class="det-lbl">분류</div><div class="det-val">'+(t.category||'-')+'</div></div>'+
       '<div><div class="det-lbl">담당자</div><div class="det-val">'+(t.assignee||'-')+'</div></div>'+
-      '<div><div class="det-lbl">기한</div><div class="det-val">'+fmtDue(t.due)+'</div></div>'+
+      '<div><div class="det-lbl">기한</div><div class="det-val">'+(t.due==='TBD'?'<span style="background:var(--gray-bg);color:var(--text3);padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600">TBD</span>':fmtDue(t.due))+'</div></div>'+
+      '<div><div class="det-lbl">등록일</div><div class="det-val" style="color:var(--text2)">'+(t.createdAt?fmtDate(t.createdAt):'-')+'</div></div>'+
     '</div>'+
     (t.desc?'<div class="note-box">'+t.desc+'</div>':'')+
     '<div class="log-hd"><h3>일자별 진행 내역</h3></div>'+
@@ -395,7 +401,14 @@ function formFields(d, teamOpts, stOpts, prOpts){
       '<div><label class="flbl">우선순위</label><select id="f-priority">'+prOpts+'</select></div>'+
     '</div>'+
     '<div class="frow2">'+
-      '<div><label class="flbl">처리 기한</label><input type="date" id="f-due" value="'+(d.due||'')+'"></div>'+
+      '<div><label class="flbl">처리 기한</label>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input type="date" id="f-due" value="'+(d.due==='TBD'?'':d.due||'')+'" style="flex:1;'+(d.due==='TBD'?'opacity:.35;pointer-events:none':'')+'">'+
+          '<label style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap">'+
+            '<input type="checkbox" id="f-tbd" '+(d.due==='TBD'?'checked':'')+' style="width:auto;padding:0;accent-color:var(--blue)"> TBD'+
+          '</label>'+
+        '</div>'+
+      '</div>'+
       '<div><label class="flbl">담당자</label><input type="text" id="f-assignee" value="'+(d.assignee||'')+'" placeholder="담당자 입력"></div>'+
     '</div>'+
     '<div class="frow"><label class="flbl">상세 내용</label><textarea id="f-desc" placeholder="상세 내용 (선택)">'+(d.desc||'')+'</textarea></div>';
@@ -528,6 +541,8 @@ function rModal(){
 }
 
 function readTaskForm(id){
+  const tbd = document.getElementById('f-tbd') && document.getElementById('f-tbd').checked;
+  const dueVal = tbd ? 'TBD' : (document.getElementById('f-due').value || '');
   return {
     id: id,
     title: document.getElementById('f-title').value.trim(),
@@ -535,7 +550,7 @@ function readTaskForm(id){
     category: document.getElementById('f-cat').value.trim(),
     status: document.getElementById('f-status').value,
     priority: document.getElementById('f-priority').value,
-    due: document.getElementById('f-due').value,
+    due: dueVal,
     assignee: document.getElementById('f-assignee').value.trim(),
     desc: document.getElementById('f-desc').value.trim(),
     logs: []
@@ -546,9 +561,11 @@ function saveTaskForm(){
   if(!title){ alert('업무명을 입력하세요.'); return; }
   if(S.modal.type==='editTask'){
     const t = S.data.tasks.find(function(x){return x.id===S.modal.id;});
-    if(t){ const updated = readTaskForm(t.id); updated.logs = t.logs; Object.assign(t, updated); }
+    if(t){ const updated = readTaskForm(t.id); updated.logs = t.logs; updated.createdAt = t.createdAt || td(); Object.assign(t, updated); }
   } else {
-    S.data.tasks.push(readTaskForm(uid(S.data.tasks)));
+    const newTask = readTaskForm(uid(S.data.tasks));
+    newTask.createdAt = td();
+    S.data.tasks.push(newTask);
   }
   saveData(); S.modal=null; render();
 }
@@ -577,6 +594,9 @@ function bind(){
   document.querySelectorAll('.tab').forEach(function(b){ b.addEventListener('click', function(){ S.page=b.dataset.pg; S.modal=null; render(); }); });
   document.querySelectorAll('[data-kpi]').forEach(function(el){ el.addEventListener('click', function(){ S.kpiFilter=el.dataset.kpi; render(); }); });
   const si = document.getElementById('search-in'); if(si) si.addEventListener('input', function(e){ S.search=e.target.value; render(); });
+  const tbdChk = document.getElementById('f-tbd');
+  const dueInp = document.getElementById('f-due');
+  if(tbdChk && dueInp){ tbdChk.addEventListener('change', function(){ if(this.checked){ dueInp.value=''; dueInp.style.opacity='.35'; dueInp.style.pointerEvents='none'; } else { dueInp.style.opacity='1'; dueInp.style.pointerEvents=''; } }); }
   const tf = document.getElementById('team-filter'); if(tf) tf.addEventListener('change', function(e){ S.teamFilter=e.target.value; render(); });
   document.querySelectorAll('[data-sort]').forEach(function(el){ el.addEventListener('click', function(){ S.sortMode=el.dataset.sort; render(); }); });
   const atb = document.getElementById('add-task-btn'); if(atb) atb.addEventListener('click', function(){ S.modal={type:'addTask'}; S.ed={status:'예정',priority:'보통',team:S.data.teams[0].name}; render(); });
@@ -609,7 +629,8 @@ function bind(){
   if(ips) ips.addEventListener('click', function(){
     const title=document.getElementById('f-title').value.trim();
     if(!title){ alert('업무명을 입력하세요.'); return; }
-    S.data.tasks.push(readTaskForm(uid(S.data.tasks)));
+    const nt=readTaskForm(uid(S.data.tasks)); nt.createdAt=td();
+    S.data.tasks.push(nt);
     saveData(); S.page='dashboard'; S.kpiFilter='전체'; render();
   });
   const ot = document.getElementById('org-team'); if(ot) ot.addEventListener('change', function(e){ S.orgTeamFilter=e.target.value; render(); });
