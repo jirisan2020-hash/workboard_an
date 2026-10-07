@@ -126,6 +126,9 @@ tr:hover td{background:#FAFBFC}
 .danger-box{border:1px solid #FCA5A5;background:#FEF2F2;border-radius:10px;padding:1rem 1.25rem}
 .btn-danger{background:#fff;border:1px solid var(--red);color:var(--red);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer}
 .btn-danger:hover{background:var(--red-bg)}
+.wb-toast{position:fixed;bottom:24px;right:24px;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:9999;transition:opacity .4s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.wb-toast-ok{background:#1a1a2e;color:#fff}
+.wb-toast-err{background:#DC2626;color:#fff}
 @media(max-width:900px){
   .kpi-row{grid-template-columns:repeat(3,1fr)}
   .team-row{grid-template-columns:repeat(2,1fr)}
@@ -138,7 +141,7 @@ tr:hover td{background:#FAFBFC}
 
 <header>
   <div class="hd-inner">
-    <div class="logo"><span class="logo-mark">W</span>WorkBoard</div>
+    <div class="logo"><span class="logo-mark">W</span>WorkBoard <span id="ver-badge" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px"></span></div>
     <nav id="nav">
       <button class="tab" data-pg="dashboard">대시보드</button>
       <button class="tab" data-pg="input">업무 입력</button>
@@ -162,6 +165,7 @@ const STATUS_COLOR = {
 };
 const PRIORITY = ['높음','보통','낮음'];
 const SKEY = 'dw_workboard_v1';
+const APP_VER = 'v2025-fix4';   // 버전 식별자 — 캐시 여부 확인용
 
 const TEAM_PALETTE = [
   {color:'#3B82F6', bg:'var(--blue-bg)',   text:'var(--blue-text)'},
@@ -208,11 +212,86 @@ const SEED_ORGLOGS = [
 
 let S = { page:'dashboard', data:null, kpiFilter:'전체', search:'', teamFilter:'전체', sortMode:'due', modal:null, ed:{} };
 
+let _isFirstRun = false;
+
 function loadData(){
-  try{ const r = localStorage.getItem(SKEY); if(r) return JSON.parse(r); }catch(e){}
+  try{
+    const r = localStorage.getItem(SKEY);
+    if(r){
+      const parsed = JSON.parse(r);
+      if(parsed && Array.isArray(parsed.tasks)){ return parsed; }
+    }
+  }catch(e){ console.warn('[WorkBoard] localStorage 읽기 실패:', e); }
+  _isFirstRun = true;
   return { teams: JSON.parse(JSON.stringify(SEED_TEAMS)), tasks: JSON.parse(JSON.stringify(SEED_TASKS)), orgLogs: JSON.parse(JSON.stringify(SEED_ORGLOGS)), extraCategories: [] };
 }
-function saveData(){ try{ localStorage.setItem(SKEY, JSON.stringify(S.data)); }catch(e){} }
+
+function saveData(){
+  try{
+    S.data._savedAt = new Date().toISOString();
+    S.data._ver = APP_VER;
+    const json = JSON.stringify(S.data);
+    localStorage.setItem(SKEY, json);
+    // 즉시 재검증 — 실제로 저장됐는지 확인
+    const verify = localStorage.getItem(SKEY);
+    if(!verify) throw new Error('저장 후 재확인 실패');
+    showToast('저장됨 ✓ ('+S.data.tasks.length+'건)', 'ok');
+    updateStorageStatus();
+  }catch(e){
+    console.error('[WorkBoard] 저장 실패:', e);
+    showToast('⚠ 저장 실패 — 브라우저 저장소를 확인하세요', 'err');
+  }
+}
+
+function updateStorageStatus(){
+  const el = document.getElementById('storage-status');
+  if(!el) return;
+  try{
+    const r = localStorage.getItem(SKEY);
+    if(r){
+      const d = JSON.parse(r);
+      const savedAt = d._savedAt ? new Date(d._savedAt).toLocaleString('ko-KR') : '알 수 없음';
+      el.innerHTML = '<span style="color:var(--green-text)">✓ 정상</span> — 업무 '+d.tasks.length+'건 저장 · 마지막 저장: '+savedAt+' · 버전: '+(d._ver||'구버전');
+    } else {
+      el.innerHTML = '<span style="color:var(--amber)">⚠ 저장 데이터 없음</span> — 기본 데이터 사용 중';
+    }
+  }catch(e){
+    el.innerHTML = '<span style="color:var(--red)">✗ 오류: '+e.message+'</span>';
+  }
+}
+
+function showToast(msg, type){
+  let el = document.getElementById('wb-toast');
+  if(!el){ el = document.createElement('div'); el.id='wb-toast'; document.body.appendChild(el); }
+  el.textContent = (type==='ok' ? '✓ ' : '⚠ ') + msg;
+  el.className = 'wb-toast ' + (type==='ok' ? 'wb-toast-ok' : 'wb-toast-err');
+  el.style.opacity='1';
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.opacity='0'; }, type==='ok' ? 1400 : 4000);
+}
+
+function exportBackup(){
+  try{
+    const blob = new Blob([JSON.stringify(S.data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download='workboard_backup_'+td()+'.json'; a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){ alert('백업 실패: '+e.message); }
+}
+
+function importBackup(file){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data || !Array.isArray(data.tasks)){ alert('올바르지 않은 백업 파일입니다.'); return; }
+      S.data = data; saveData(); render();
+      showToast('데이터 가져오기 완료 ('+data.tasks.length+'건)', 'ok');
+    }catch(err){ alert('파일 읽기 실패: '+err.message); }
+  };
+  reader.readAsText(file);
+}
 const uid = arr => Math.max(0, ...arr.map(x=>x.id)) + 1;
 const td  = () => new Date().toISOString().slice(0,10);
 const fmtDue = function(iso){ if(!iso || iso==='TBD') return iso==='TBD' ? 'TBD' : '-'; const p=iso.split('-'); return (+p[1])+'월 '+(+p[2])+'일'; };
@@ -522,12 +601,23 @@ function rSettingsPage(){
     return '<div class="cat-row"><span>'+c+'</span><span style="color:var(--text3);display:flex;align-items:center;gap:10px">'+cnt+'건 <span class="cat-x" data-rmcat="'+c+'">×</span></span></div>';
   }).join('') || '<div style="font-size:12.5px;color:var(--text3);margin-bottom:8px">등록된 분류가 없습니다.</div>';
   return '<div class="pg-hd"><h1>설정</h1></div>'+
+  '<div class="set-card" style="border-color:var(--border)"><div class="set-title">📊 저장 상태 진단</div>'+
+    '<div id="storage-status" style="font-size:13px;margin-bottom:10px">확인 중...</div>'+
+    '<div style="font-size:11.5px;color:var(--text3)">현재 실행 버전: <b style="color:var(--text)">'+APP_VER+'</b> — 이 값이 <b>v2025-fix4</b>가 아니면 브라우저에 구버전이 캐시된 것입니다. <b>Ctrl+Shift+R</b>(Windows) 또는 <b>Cmd+Shift+R</b>(Mac)로 강제 새로고침 하세요.</div>'+
+  '</div>'+
   '<div class="set-card"><div class="set-title">팀 분류 관리 ('+S.data.teams.length+'개)</div>'+teamRows+
     '<div class="cat-add-row" style="margin-top:.75rem"><input type="text" id="new-team" placeholder="새 팀 이름 입력 후 Enter 또는 추가"><button class="btn-blue" id="add-team-btn">＋ 팀 추가</button></div>'+
     '<div style="font-size:11.5px;color:var(--text3);margin-top:4px">* 이름 변경은 즉시 자동 저장됩니다. 팀 삭제 시 소속 업무는 다른 팀으로 자동 이동됩니다.</div></div>'+
   '<div class="set-card"><div class="set-title">업무 분류 관리</div>'+
     '<div class="cat-add-row"><input type="text" id="new-cat" placeholder="새 분류 입력 후 Enter 또는 추가"><button class="btn-blue" id="add-cat-btn">＋ 추가</button></div>'+
     catRows+'</div>'+
+  '<div class="set-card"><div class="set-title">데이터 백업 / 복원</div>'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">'+
+      '<button class="btn-blue" id="export-btn">📥 백업 파일 다운로드</button>'+
+      '<label class="btn-plain" style="cursor:pointer">📤 백업 파일 가져오기 <input type="file" id="import-file" accept=".json" style="display:none;width:auto;padding:0;border:none"></label>'+
+    '</div>'+
+    '<div style="font-size:11.5px;color:var(--text3)">데이터 분실에 대비해 주기적으로 백업 파일을 저장해 두세요.</div>'+
+  '</div>'+
   '<div class="set-card"><div class="set-title">데이터 초기화</div>'+
     '<div class="danger-box"><button class="btn-danger" id="reset-btn">전체 업무 초기화</button>'+
     '<div style="font-size:11.5px;color:var(--text2);margin-top:8px">모든 업무·조직관리일지 데이터가 영구적으로 삭제됩니다. 복구할 수 없습니다.</div></div></div>';
@@ -686,6 +776,10 @@ function bind(){
     S.data.extraCategories = (S.data.extraCategories||[]).filter(function(c){return c!==cat;});
     saveData(); render();
   }); });
+  updateStorageStatus();
+  const expBtn = document.getElementById('export-btn'); if(expBtn) expBtn.addEventListener('click', exportBackup);
+  const impFile = document.getElementById('import-file');
+  if(impFile) impFile.addEventListener('change', function(e){ if(e.target.files[0]) importBackup(e.target.files[0]); });
   const rb = document.getElementById('reset-btn'); if(rb) rb.addEventListener('click', function(){
     if(!confirm('모든 업무와 조직관리일지를 삭제합니다. 계속하시겠습니까?')) return;
     S.data.tasks=[]; S.data.orgLogs=[]; saveData(); render();
@@ -693,8 +787,13 @@ function bind(){
 }
 
 S.data = loadData();
-saveData();
+if(_isFirstRun){ saveData(); }   // 최초 실행(SEED 로드)일 때만 저장 — 기존 데이터 덮어쓰기 방지
 render();
+// 헤더 버전 배지 표시
+const vb = document.getElementById('ver-badge');
+if(vb) vb.textContent = APP_VER;
+// 설정 탭 저장 상태 초기 표시
+updateStorageStatus();
 </script>
 </body>
 </html>
