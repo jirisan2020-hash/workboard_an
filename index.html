@@ -354,7 +354,12 @@ function rDashboard(){
     const q = S.search.trim().toLowerCase();
     filt = filt.filter(function(t){ return (t.title+t.desc+t.assignee).toLowerCase().indexOf(q)!==-1; });
   }
-  filt = filt.slice().sort(function(a,b){ return S.sortMode==='due' ? (a.due||'9999').localeCompare(b.due||'9999') : a.id-b.id; });
+  filt = filt.slice().sort(function(a,b){
+    if(S.sortMode!=='due') return a.id-b.id;
+    var da = (!a.due||a.due==='TBD') ? '9999-99-99' : a.due;
+    var db = (!b.due||b.due==='TBD') ? '9999-99-99' : b.due;
+    return da.localeCompare(db);
+  });
 
   const teamOpts = ['전체'].concat(S.data.teams.map(function(t){return t.name;})).map(function(t){
     return '<option '+(S.teamFilter===t?'selected':'')+'>'+t+'</option>';
@@ -412,9 +417,10 @@ function rTaskRow(t){
 function runAnalysis(){
   const today = new Date(td());
   const tasks = S.data.tasks.filter(function(t){return t.status!=='완료';});
+  const hasDue = function(t){ return t.due && t.due!=='TBD'; };
   const dday = function(t){ return Math.ceil((new Date(t.due) - today) / 86400000); };
-  const overdue = tasks.filter(function(t){return dday(t) < 0;});
-  const soon = tasks.filter(function(t){return dday(t) >= 0 && dday(t) <= 7;});
+  const overdue = tasks.filter(function(t){ return hasDue(t) && dday(t) < 0; });
+  const soon    = tasks.filter(function(t){ return hasDue(t) && dday(t) >= 0 && dday(t) <= 7; });
   const noLog = tasks.filter(function(t){return (!t.logs || t.logs.length===0) && t.status==='진행중';});
   const urgent = tasks.filter(function(t){return t.status==='긴급';});
   let html = '';
